@@ -2,6 +2,21 @@ import requests
 import time
 
 
+def clean_and_split_movie_list(movie_list):
+    # Объединяем все элементы списка в одну строку
+    combined_string = ' '.join(movie_list)
+
+    # Заменяем переносы строк и лишние пробелы на запятые
+    cleaned_string = combined_string.replace('\n', '').replace(' , ', ', ')
+
+    # Разделяем строку по запятым и убираем лишние пробелы вокруг элементов
+    split_list = [movie.strip() for movie in cleaned_string.split(',')]
+
+    return split_list
+
+
+
+
 def gpt(text):
     input = {
         "messages": [
@@ -10,7 +25,7 @@ def gpt(text):
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Напиши только название фильма без кавычек на английском языке. {text}"
+                        "text": f"Напиши только строку python, состоящую только из названий фильмов без кавычек с разделителем запятая на английском языке. {text}"
                     }
                 ]
             }
@@ -39,7 +54,7 @@ def gpt(text):
         exit()
 
     # Ждем 3 секунды
-    time.sleep(3)
+    time.sleep(5)
 
     # Формируем URL для второго запроса
     url_endpoint1 = f'https://api.gen-api.ru/api/v1/request/get/{request_id}'
@@ -48,17 +63,13 @@ def gpt(text):
     response1 = requests.get(url_endpoint1, headers=headers)
 
     if response1.json().get('result') is None:
-        time.sleep(2)
+        time.sleep(5)
         url_endpoint1 = f'https://api.gen-api.ru/api/v1/request/get/{request_id}'
 
         # Отправляем второй GET запрос
         response1 = requests.get(url_endpoint1, headers=headers)
-        if response1.json().get('result') is None:
-            time.sleep(2)
-            url_endpoint1 = f'https://api.gen-api.ru/api/v1/request/get/{request_id}'
 
-            # Отправляем второй GET запрос
-            response1 = requests.get(url_endpoint1, headers=headers)
-            return response1.json().get('result')
-        return response1.json().get('result')
-    return response1.json().get('result')
+        return clean_and_split_movie_list(response1.json().get('result'))
+    return clean_and_split_movie_list(response1.json().get('result'))
+
+

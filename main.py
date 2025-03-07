@@ -16,7 +16,7 @@ import request
 
 app = FastAPI()
 origins = [
-    "http://localhost:3000",  # Или ваш домен фронтенда
+     "http://localhost:3000",  # Или ваш домен фронтенда
     "http://localhost", #Для запуска без порта
     "*" #НЕ РЕКОМЕНДУЕТСЯ. Только для тестов, разрешает все домены
 ]
@@ -49,9 +49,6 @@ class SearchingSchema(BaseModel):
     the_search_bar: str
 
 
-class Tag_Schema(BaseModel):
-    tags: str
-
 
 class Gpt_Schema(BaseModel):
     query: str
@@ -65,7 +62,7 @@ class Favorites_Schema(BaseModel):
     title: str
 
 
-@app.post('/login')
+@app.post('/autorize')
 async def login(creds: UserLoginSchema, response: Response):
     if request.check_nickname(creds.username):
         id = request.input(creds.username, creds.password)
@@ -77,7 +74,7 @@ async def login(creds: UserLoginSchema, response: Response):
 
 
 
-@app.post('/autorize')
+@app.post('/login')
 async def autorize(creds: UserLoginSchema, response: Response):
     if request.authorize_us(creds.username, creds.password):
         id = request.get_user_id_by_nickname(creds.username)
@@ -131,7 +128,7 @@ async def login(creds: Favorites_Schema, request1: Request):
 @app.post('/search_tag')
 async def search_tag(creds: SearchingSchema):
     try:
-        search = creds.tags
+        search = creds.the_search_bar
         a = request.search_by_tags(search)
         return a
     except Exception as e:
@@ -176,22 +173,24 @@ async def all_movies():
 
 @app.get('/action_moves')
 async def action_moves():
-    res = request.action_tags()
-    movies = await res
-    return {'ok': True, 'movies': movies}
+    try:
+        res = request.action_tags()
+        movies = await res
+        return {'ok': True, 'movies': movies}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.post('/search_by_gpt')
 async def search_by_gpt(creds: Gpt_Schema):
-    print(creds)
+    print()
     try:
         res_gpt = YandexGpt.gpt(creds.query)
-        res_bd = request.search_movies(creds.query)
-        res_gpt_bd = request.search_movies(*res_gpt)
-        print(res_gpt_bd)
+        #res_bd = request.search_movies(creds.query)
+        res_gpt_bd = request.search_movies(res_gpt)
         return {'films': res_gpt_bd}
-    except Exception as e:
-        return {f'error: Invalid query {e}'}
+    except Exception:
+        return {"error": "Invalid query"}
 
 
 @app.get('/get_favorites')
@@ -201,6 +200,23 @@ async def get_favorites(request1: Request):
         fav = request.get_favorites(a)
         fav1 = request.favor_movies(fav)
         return {'favorites': fav1}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get('/unlogin')
+async def unlogin(request1: Request, response: Response):
+    try:
+        a = get_user_id(request1)
+        response.delete_cookie(
+            key=config.JWT_ACCESS_COOKIE_NAME,  # Имя cookie
+            path="/",  # Путь, для которого действует cookie
+            domain=None,  # Домен, для которого действует cookie
+            secure=False,  # Только для HTTPS, если True
+            httponly=True,  # Запретить доступ к cookie через JavaScript
+            samesite="lax")
+
+        return {'message': 'ok'}
 
     except Exception as e:
         return {"error": str(e)}

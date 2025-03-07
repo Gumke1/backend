@@ -42,7 +42,6 @@ def input(n, p):
         print("Ошибка при подключении к PostgreSQL", error)
 
 
-import psycopg2
 
 def get_user_id_by_nickname(nickname):
     # Устанавливаем соединение с базой данных
@@ -108,8 +107,6 @@ def check_nickname(nickname):
 
 
 
-import psycopg2
-
 def add_favourites(user_id, new_favourite):
     conn = psycopg2.connect(
         user="man",
@@ -162,8 +159,11 @@ def add_favourites(user_id, new_favourite):
     conn.close()
 
 
-def search_movies(search_query):
+
+
+'''def search_movies(search_queries):
     try:
+        # Подключение к базе данных
         conn = psycopg2.connect(
             user="man",
             password="man",
@@ -173,36 +173,131 @@ def search_movies(search_query):
         )
         cur = conn.cursor()
 
-        query = """
-            SELECT title, stars, director, actor, description
-            FROM my_table
-            WHERE 
-                stars ILIKE %s OR
-                title ILIKE %s OR
-                tags ILIKE %s OR
-                director ILIKE %s OR
-                actor ILIKE %s OR
-                description ILIKE %s;
-        """
+        all_results = []
 
-        search_pattern = f"%{search_query.lower()}%"
-        params = (search_pattern, search_pattern, search_pattern, search_pattern, search_pattern, search_pattern)
+        for search_query in search_queries:
+            # Шаг 1: Поиск по названию
+            title_query = """
+                SELECT *
+                FROM my_table
+                WHERE title ILIKE %s;
+            """
+            title_pattern = f"%{search_query.lower()}%"
+            cur.execute(title_query, (title_pattern,))
+            title_results = cur.fetchall()
 
-        cur.execute(query, params)
+            if title_results:
+                all_results.extend(title_results)
+                continue  # Если найдены результаты по названию, переходим к следующему запросу
 
-        results = cur.fetchall()
+            # Шаг 2: Поиск по описанию и актёрам (если по названию ничего не найдено)
+            description_actor_query = """
+                SELECT *
+                FROM my_table
+                WHERE description ILIKE %s OR actor ILIKE %s;
+            """
+            description_actor_pattern = f"%{search_query.lower()}%"
+            cur.execute(description_actor_query, (description_actor_pattern, description_actor_pattern))
+            description_actor_results = cur.fetchall()
 
-        return results
+
+
+            if description_actor_results:
+                all_results.extend(description_actor_results)
+
+        return all_results
 
     except Exception as error:
         print("Ошибка при выполнении запроса:", error)
         return []
 
     finally:
+        # Закрытие соединения с базой данных
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()'''
+
+
+
+
+def search_movies(search_queries):
+    try:
+        # Подключение к базе данных
+        conn = psycopg2.connect(
+            user="man",
+            password="man",
+            host="127.0.0.1",
+            port="5432",
+            database="my_database"
+        )
+        cur = conn.cursor()
+
+        all_results = []
+        unique_ids = set()  # Для отслеживания уникальных ID фильмов
+
+        for search_query in search_queries:
+            # Шаг 1: Поиск по названию
+            title_query = """
+                SELECT *
+                FROM my_table
+                WHERE title ILIKE %s;
+            """
+            title_pattern = f"%{search_query.lower()}%"
+            cur.execute(title_query, (title_pattern,))
+            title_results = cur.fetchall()
+
+            if title_results:
+                for result in title_results:
+                    if result[0] not in unique_ids:  # Проверка на уникальность
+                        all_results.append(format_result(result))
+                        unique_ids.add(result[0])  # Добавляем ID в набор уникальных ID
+                continue  # Переходим к следующему запросу
+
+            # Шаг 2: Поиск по описанию и актёрам
+            description_actor_query = """
+                SELECT *
+                FROM my_table
+                WHERE description ILIKE %s OR actor ILIKE %s;
+            """
+            description_actor_pattern = f"%{search_query.lower()}%"
+            cur.execute(description_actor_query, (description_actor_pattern, description_actor_pattern))
+            description_actor_results = cur.fetchall()
+
+            if description_actor_results:
+                for result in description_actor_results:
+                    if result[0] not in unique_ids:  # Проверка на уникальность
+                        all_results.append(format_result(result))
+                        unique_ids.add(result[0])  # Добавляем ID в набор уникальных ID
+
+        return all_results
+
+    except Exception as error:
+        print("Ошибка при выполнении запроса:", error)
+        return []
+
+    finally:
+        # Закрытие соединения с базой данных
         if cur:
             cur.close()
         if conn:
             conn.close()
+
+def format_result(result):
+    return {
+        "id": result[0],  # Замените индекс в result на соответствующий столбец id
+        "title": result[1],  # Замените индекс на соответствующий столбец title
+        "tags": result[2],  # Замените индекс на соответствующий столбец tags
+        "stars": result[3],  # Замените индекс на соответствующий столбец stars
+        "director": result[4],  # Замените индекс на соответствующий столбец director
+        "actor": result[5],  # Замените индекс на соответствующий столбец actor
+        "year": result[6],  # Замените индекс на соответствующий столбец year
+        "runtime": result[7],  # Замените индекс на соответствующий столбец runtime
+        "link": result[8],  # Замените индекс на соответствующий столбец link
+        "description": result[9]  # Замените индекс на соответствующий столбец description
+    }
+
+
 
 
 
@@ -217,7 +312,7 @@ async def ret_movies():
             database="my_database"
         )
         cur = conn.cursor()
-        cur.execute("SELECT * FROM my_table")  # Замените 'your_table_name' на имя таблицы
+        cur.execute("SELECT * FROM my_table LIMIT 500")  # Замените 'your_table_name' на имя таблицы
         rows = cur.fetchall()
 
         # Получение названий столбцов
@@ -227,7 +322,7 @@ async def ret_movies():
         data = [dict(zip(columns, row)) for row in rows]
 
         # Преобразование в JSON
-        json_data = json.dumps(data, indent=4)  # indent=4 для красивого форматирования
+        #json_data = json.dumps(data, indent=4)  # indent=4 для красивого форматирования
 
         return data
 
@@ -245,6 +340,7 @@ async def ret_movies():
 
 
 
+
 def search_by_tags(search_query):
     try:
         conn = psycopg2.connect(
@@ -257,7 +353,7 @@ def search_by_tags(search_query):
         cur = conn.cursor()
 
         query = """
-            SELECT title, stars, director, actor, description
+            SELECT *
             FROM my_table
             WHERE 
                 title ILIKE %s OR
@@ -269,9 +365,14 @@ def search_by_tags(search_query):
 
         cur.execute(query, params)
 
-        results = cur.fetchall()
+        rows = cur.fetchall()
 
-        return results
+        columns = [column[0] for column in cur.description]
+
+        # Преобразование данных в список словарей
+        data = [dict(zip(columns, row)) for row in rows]
+
+        return data
 
     except Exception as error:
         print("Ошибка при выполнении запроса:", error)
@@ -286,7 +387,7 @@ def search_by_tags(search_query):
 
 
 
-def action_tags():
+async def action_tags():
     try:
         conn = psycopg2.connect(
             user="man",
@@ -298,7 +399,7 @@ def action_tags():
         cur = conn.cursor()
 
         query = """
-                    SELECT title, stars, director, actor, description
+                    SELECT *
                     FROM my_table
                     WHERE tags ILIKE %s;   
                 """
@@ -324,65 +425,6 @@ def action_tags():
         if conn:
             conn.close()
 
-
-
-def del_from_favorites(username, favorite_item):
-    try:
-        conn = psycopg2.connect(
-            user="man",
-            password="man",
-            host="127.0.0.1",
-            port="5432",
-            database="my_database"
-        )
-        cur = conn.cursor()
-
-        # Ищем пользователя по username
-        find_user_query = """
-            SELECT id FROM users_table
-            WHERE Nickname = %s;"""
-        cur.execute(find_user_query, (username,))
-        user = cur.fetchone()
-
-        fav = """
-                    SELECT favourites FROM users_table
-                    WHERE Nickname = %s;"""
-        cur.execute(fav, (username,))
-        fav1 = cur.fetchall()
-
-
-        if user:
-            user_id = user[0]  # Получаем ID пользователя
-
-            # Обновляем избранное в таблице users_table
-            update_favorite_query = """
-                UPDATE users_table
-                SET favourites = %s
-                WHERE id = %s;"""
-            if fav1 is not None:
-                fav1 = [('The Hangover',), ('Frozen',)]
-                result = ', '.join(movie[0] for movie in fav1)
-                print(result)
-                cur.execute(update_favorite_query, (favorite_item + ' ' +   result, user_id))
-            else:
-                cur.execute(update_favorite_query, (favorite_item, user_id))
-
-            # Фиксация изменений
-            conn.commit()
-            print(f"Избранное '{favorite_item}' добавлено для пользователя '{username}'.")
-        else:
-            print(f"Пользователь '{username}' не найден.")
-
-    except Exception as error:
-        print("Ошибка при подключении к PostgreSQL", error)
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-
-
-import psycopg2
 
 
 def get_favorites(user_id):
