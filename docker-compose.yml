@@ -1,0 +1,22 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:latest
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - /mnt/c/Users/sidor/your_db_backup.dump:/docker-entrypoint-initdb.d/your_db_backup.dump
+
+  app:
+    build: .
+    image: build2
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: always
+    depends_on:
+      - db
+
+volumes:
+  db_data:
