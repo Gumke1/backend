@@ -159,68 +159,6 @@ def add_favourites(user_id, new_favourite):
     conn.close()
 
 
-
-
-'''def search_movies(search_queries):
-    try:
-        # Подключение к базе данных
-        conn = psycopg2.connect(
-            user="man",
-            password="man",
-            host="127.0.0.1",
-            port="5432",
-            database="my_database"
-        )
-        cur = conn.cursor()
-
-        all_results = []
-
-        for search_query in search_queries:
-            # Шаг 1: Поиск по названию
-            title_query = """
-                SELECT *
-                FROM my_table
-                WHERE title ILIKE %s;
-            """
-            title_pattern = f"%{search_query.lower()}%"
-            cur.execute(title_query, (title_pattern,))
-            title_results = cur.fetchall()
-
-            if title_results:
-                all_results.extend(title_results)
-                continue  # Если найдены результаты по названию, переходим к следующему запросу
-
-            # Шаг 2: Поиск по описанию и актёрам (если по названию ничего не найдено)
-            description_actor_query = """
-                SELECT *
-                FROM my_table
-                WHERE description ILIKE %s OR actor ILIKE %s;
-            """
-            description_actor_pattern = f"%{search_query.lower()}%"
-            cur.execute(description_actor_query, (description_actor_pattern, description_actor_pattern))
-            description_actor_results = cur.fetchall()
-
-
-
-            if description_actor_results:
-                all_results.extend(description_actor_results)
-
-        return all_results
-
-    except Exception as error:
-        print("Ошибка при выполнении запроса:", error)
-        return []
-
-    finally:
-        # Закрытие соединения с базой данных
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()'''
-
-
-
-
 def search_movies(search_queries):
     try:
         # Подключение к базе данных
@@ -234,43 +172,55 @@ def search_movies(search_queries):
         cur = conn.cursor()
 
         all_results = []
-        unique_ids = set()  # Для отслеживания уникальных ID фильмов
 
         for search_query in search_queries:
-            # Шаг 1: Поиск по названию
-            title_query = """
-                SELECT *
+            # Поиск по названию и описанию в одном запросе
+            query = """
+                SELECT id, title, tags, stars, director, actor, year, runtime, link, description,
+                    CASE 
+                        WHEN title ILIKE %s THEN 1  -- Приоритет 1 для совпадений по названию
+                        WHEN description ILIKE %s THEN 2  -- Приоритет 2 для совпадений по описанию
+                        ELSE 3  -- Приоритет 3 для остальных случаев (если вдруг добавится что-то ещё)
+                    END AS priority
                 FROM my_table
-                WHERE title ILIKE %s;
+                WHERE title ILIKE %s OR description ILIKE %s
+                ORDER BY priority, id;  -- Сортировка по приоритету и порядку в базе данных
             """
-            title_pattern = f"%{search_query.lower()}%"
-            cur.execute(title_query, (title_pattern,))
-            title_results = cur.fetchall()
+            pattern = f"%{search_query.lower()}%"
+            cur.execute(query, (pattern, pattern, pattern, pattern))
+            results = cur.fetchall()
 
-            if title_results:
-                for result in title_results:
-                    if result[0] not in unique_ids:  # Проверка на уникальность
-                        all_results.append(format_result(result))
-                        unique_ids.add(result[0])  # Добавляем ID в набор уникальных ID
-                continue  # Переходим к следующему запросу
+            # Добавляем результаты в общий список
+            all_results.extend(results)
 
-            # Шаг 2: Поиск по описанию и актёрам
-            description_actor_query = """
-                SELECT *
-                FROM my_table
-                WHERE description ILIKE %s OR actor ILIKE %s;
-            """
-            description_actor_pattern = f"%{search_query.lower()}%"
-            cur.execute(description_actor_query, (description_actor_pattern, description_actor_pattern))
-            description_actor_results = cur.fetchall()
+        # Сортируем результаты:
+        # 1. Сначала по приоритету (1 — совпадение по названию, 2 — по описанию)
+        # 2. Затем по порядку встречаемости в базе данных (предполагаем, что порядок в базе данных соответствует частоте встречаемости)
+        all_results.sort(key=lambda x: (x[-1], x[0]))
 
-            if description_actor_results:
-                for result in description_actor_results:
-                    if result[0] not in unique_ids:  # Проверка на уникальность
-                        all_results.append(format_result(result))
-                        unique_ids.add(result[0])  # Добавляем ID в набор уникальных ID
+        # Преобразуем результаты в список словарей и убираем дубликаты по id
+        final_results = []
+        seen_ids = set()  # Множество для отслеживания уникальных id
 
-        return all_results
+        for result in all_results:
+            movie_id = result[0]
+            if movie_id not in seen_ids:
+                seen_ids.add(movie_id)
+                movie = {
+                    "id": movie_id,
+                    "title": result[1],
+                    "tags": result[2],
+                    "stars": result[3],
+                    "director": result[4],
+                    "actor": result[5],
+                    "year": result[6],
+                    "runtime": result[7],
+                    "link": result[8],
+                    "description": result[9]
+                }
+                final_results.append(movie)
+
+        return final_results
 
     except Exception as error:
         print("Ошибка при выполнении запроса:", error)
@@ -282,22 +232,6 @@ def search_movies(search_queries):
             cur.close()
         if conn:
             conn.close()
-
-def format_result(result):
-    return {
-        "id": result[0],  # Замените индекс в result на соответствующий столбец id
-        "title": result[1],  # Замените индекс на соответствующий столбец title
-        "tags": result[2],  # Замените индекс на соответствующий столбец tags
-        "stars": result[3],  # Замените индекс на соответствующий столбец stars
-        "director": result[4],  # Замените индекс на соответствующий столбец director
-        "actor": result[5],  # Замените индекс на соответствующий столбец actor
-        "year": result[6],  # Замените индекс на соответствующий столбец year
-        "runtime": result[7],  # Замените индекс на соответствующий столбец runtime
-        "link": result[8],  # Замените индекс на соответствующий столбец link
-        "description": result[9]  # Замените индекс на соответствующий столбец description
-    }
-
-
 
 
 
@@ -543,6 +477,58 @@ def favor_movies(movie_titles: list) -> list:
             conn.close()
     return data
 
+
+
+
+def id_movies(movie_id: int):
+    try:
+        # Устанавливаем соединение с базой данных
+        conn = psycopg2.connect(
+            user="man",
+            password="man",
+            host="127.0.0.1",
+            port="5432",
+            database="my_database"
+        )
+        cur = conn.cursor()
+        # Выполняем запрос к базе данных по указанному id
+        query = "SELECT * FROM my_table WHERE id = %s"
+        params = (movie_id,)  # Кортеж с одним элементом
+
+        # Выполнение запроса
+        cur.execute(query, params)
+
+        # Получение результатов
+        rows = cur.fetchall()
+
+        # Если запись найдена, возвращаем её в виде словаря
+        if rows:
+            movies = []
+            for row in rows:
+                movie = {
+                    "id": row[0],
+                    "title": row[1],
+                    "tags": row[2],
+                    "stars": row[3],
+                    "director": row[4],
+                    "actor": row[5],
+                    "year": row[6],
+                    "runtime": row[7],
+                    "link": row[8],
+                    "description": row[9],
+                }
+                movies.append(movie)
+            return movies
+        else:
+            return {"error": "Movie not found"}
+
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        # Close the database connection
+        if conn:
+            cur.close()  # Close the cursor
+            conn.close()
 
 
 

@@ -1,22 +1,38 @@
-version: "3.9"
 services:
   db:
     image: postgres:latest
     restart: always
     ports:
       - "5432:5432"
+    environment:
+      POSTGRES_USER: man
+      POSTGRES_PASSWORD: man
+      POSTGRES_DB: my_database  # Имя базы данных
     volumes:
       - db_data:/var/lib/postgresql/data
-      - /mnt/c/Users/sidor/your_db_backup.dump:/docker-entrypoint-initdb.d/your_db_backup.dump
+      - ./your_db_backup.dump:/docker-entrypoint-initdb.d/your_db_backup.dump
 
   app:
-    build: .
+    build: .  # Путь к Dockerfile бэкенда
     image: build2
     ports:
       - "127.0.0.1:8000:8000"
     restart: always
     depends_on:
       - db
+    environment:
+      DATABASE_URL: postgresql://man:man@db:5432/my_database  # URL для подключения к PostgreSQL
+
+  frontend:
+    build: /../../Desktop/tech-2025-main1  # Путь к Dockerfile фронтенда
+    image: frontend-build
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: always
+    depends_on:
+      - app
+    environment:
+      - REACT_APP_API_URL=http://app:8000  # Пример переменной окружения для API URL
 
 volumes:
   db_data:

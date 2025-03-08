@@ -61,6 +61,9 @@ class Recommend_Schema(BaseModel):
 class Favorites_Schema(BaseModel):
     title: str
 
+class Integer_Schema(BaseModel):
+    id: int
+
 
 @app.post('/autorize')
 async def login(creds: UserLoginSchema, response: Response):
@@ -183,14 +186,15 @@ async def action_moves():
 
 @app.post('/search_by_gpt')
 async def search_by_gpt(creds: Gpt_Schema):
-    print()
+    print(creds.query)
     try:
         res_gpt = YandexGpt.gpt(creds.query)
         #res_bd = request.search_movies(creds.query)
         res_gpt_bd = request.search_movies(res_gpt)
+        print(res_gpt)
         return {'films': res_gpt_bd}
-    except Exception:
-        return {"error": "Invalid query"}
+    except Exception as e:
+        return {f"error: Invalid query {e}"}
 
 
 @app.get('/get_favorites')
@@ -218,6 +222,15 @@ async def unlogin(request1: Request, response: Response):
 
         return {'message': 'ok'}
 
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get('/movie/{id}')
+async def mov_id(id: str):
+    try:
+        f_d = request.id_movies(int(id))
+        return {'movie': f_d}
     except Exception as e:
         return {"error": str(e)}
 
